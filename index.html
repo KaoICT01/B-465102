@@ -1,0 +1,1946 @@
+<!DOCTYPE html>
+<html lang="th" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ระบบบันทึกบิลและถ่ายรูปบิล V.2.0.0 (Standalone Bill Management)</title>
+  
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- FontAwesome Icons CDN -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- Chart.js CDN for Analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Kanit & Inter Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Kanit', 'Inter', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f0fdf4',
+              100: '#dcfce7',
+              500: '#22c55e',
+              600: '#16a34a',
+              700: '#15803d',
+              800: '#166534',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    body {
+      font-family: 'Kanit', 'Inter', sans-serif;
+      touch-action: manipulation;
+    }
+    
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(156, 163, 175, 0.5);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(107, 114, 128, 0.8);
+    }
+
+    /* Glassmorphism subtle effects */
+    .glass-card {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(12px);
+    }
+    .dark .glass-card {
+      background: rgba(30, 41, 59, 0.85);
+      backdrop-filter: blur(12px);
+    }
+
+    /* Camera Viewfinder Overlay */
+    .viewfinder-grid {
+      background-size: 33.33% 33.33%;
+      background-image:
+        linear-gradient(to right, rgba(255, 255, 255, 0.2) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.2) 1px, transparent 1px);
+    }
+
+    /* Modal Animation */
+    .modal-enter {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    .modal-enter-active {
+      opacity: 1;
+      transform: scale(1);
+      transition: opacity 200ms ease-out, transform 200ms ease-out;
+    }
+  </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-100 min-h-full flex flex-col transition-colors duration-200 antialiased">
+
+  <!-- Toast Notification Overlay Container -->
+  <div id="toastContainer" class="fixed top-5 right-5 z-50 flex flex-col space-y-3 max-w-sm w-full pointer-events-none px-4 sm:px-0"></div>
+
+  <!-- Confirmation Modal Dialog (Replaces native alert/confirm) -->
+  <div id="confirmModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700 transform transition-all">
+      <div class="flex items-center space-x-3 text-amber-500 mb-4">
+        <div id="confirmModalIcon" class="w-10 h-10 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center flex-shrink-0">
+          <i class="fa-solid fa-triangle-exclamation text-xl"></i>
+        </div>
+        <h3 id="confirmModalTitle" class="text-lg font-bold text-slate-900 dark:text-white">ยืนยันการดำเนินการ</h3>
+      </div>
+      <p id="confirmModalMessage" class="text-sm text-slate-600 dark:text-slate-300 mb-6 leading-relaxed">คุณแน่ใจหรือไม่ที่จะทำการลบข้อมูลนี้?</p>
+      <div class="flex items-center justify-end space-x-3">
+        <button id="confirmCancelBtn" class="px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl transition">ยกเลิก</button>
+        <button id="confirmActionBtn" class="px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-md shadow-red-500/20 transition">ยืนยัน</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Layout Wrapper -->
+  <div class="flex-1 flex flex-col md:flex-row min-h-screen">
+
+    <!-- Sidebar / Navigation for Desktop & Mobile Header -->
+    <aside class="w-full md:w-64 bg-white dark:bg-slate-800 border-r border-slate-200 dark:border-slate-700 flex flex-col flex-shrink-0 z-20">
+      <!-- App Brand Header -->
+      <div class="p-4 md:p-6 flex items-center justify-between border-b border-slate-100 dark:border-slate-700/50">
+        <div class="flex items-center space-x-3">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 to-emerald-400 flex items-center justify-center text-white shadow-lg shadow-brand-500/30">
+            <i class="fa-solid fa-receipt text-xl"></i>
+          </div>
+          <div>
+            <h1 class="font-bold text-lg leading-tight tracking-tight text-slate-900 dark:text-white">BillTracker</h1>
+            <div class="flex items-center space-x-1.5">
+              <span class="text-[10px] font-semibold bg-brand-100 dark:bg-brand-900/60 text-brand-700 dark:text-brand-300 px-2 py-0.5 rounded-full">V.2.0.0</span>
+              <span class="text-[10px] text-slate-400 font-medium"><i class="fa-solid fa-shield-halved text-brand-500 mr-0.5"></i> Standalone</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Mobile Menu Toggle Button -->
+        <button id="mobileMenuBtn" class="md:hidden p-2 rounded-lg text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 focus:outline-none">
+          <i class="fa-solid fa-bars text-xl"></i>
+        </button>
+      </div>
+
+      <!-- Navigation Links -->
+      <nav id="navMenu" class="hidden md:flex flex-col flex-1 p-3 space-y-1 overflow-y-auto">
+        <button data-nav="dashboard" class="nav-btn active flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/40">
+          <i class="fa-solid fa-chart-pie w-5 text-center text-base"></i>
+          <span data-i18n="nav_dashboard">Dashboard</span>
+        </button>
+        <button data-nav="record" class="nav-btn flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50">
+          <i class="fa-solid fa-circle-plus w-5 text-center text-base"></i>
+          <span data-i18n="nav_record">บันทึกบิลใหม่</span>
+        </button>
+        <button data-nav="bills" class="nav-btn flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50">
+          <i class="fa-solid fa-list-check w-5 text-center text-base"></i>
+          <span data-i18n="nav_bills">รายการบิลทั้งหมด</span>
+        </button>
+        <button data-nav="search" class="nav-btn flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50">
+          <i class="fa-solid fa-magnifying-glass w-5 text-center text-base"></i>
+          <span data-i18n="nav_search">ค้นหาและกรอง</span>
+        </button>
+        <button data-nav="categories" class="nav-btn flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50">
+          <i class="fa-solid fa-tags w-5 text-center text-base"></i>
+          <span data-i18n="nav_categories">จัดการหมวดหมู่</span>
+        </button>
+        <button data-nav="analysis" class="nav-btn flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50">
+          <i class="fa-solid fa-chart-column w-5 text-center text-base"></i>
+          <span data-i18n="nav_analysis">วิเคราะห์ค่าใช้จ่าย</span>
+        </button>
+        <button data-nav="notifications" class="nav-btn flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50 relative">
+          <i class="fa-solid fa-bell w-5 text-center text-base"></i>
+          <span data-i18n="nav_notifications">การแจ้งเตือน</span>
+          <span id="navNotifBadge" class="hidden absolute right-3 top-2.5 bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">0</span>
+        </button>
+        <button data-nav="settings" class="nav-btn flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50">
+          <i class="fa-solid fa-gear w-5 text-center text-base"></i>
+          <span data-i18n="nav_settings">ตั้งค่าระบบ</span>
+        </button>
+      </nav>
+
+      <!-- Sidebar Footer Status -->
+      <div class="p-4 border-t border-slate-100 dark:border-slate-700/50 text-xs text-slate-400 flex items-center justify-between">
+        <span class="flex items-center space-x-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+          <span>IndexedDB Ready</span>
+        </span>
+        <span id="currentCurrencyLabel" class="font-bold text-slate-600 dark:text-slate-300">THB (฿)</span>
+      </div>
+    </aside>
+
+    <!-- Content Area Container -->
+    <main class="flex-1 flex flex-col overflow-y-auto p-4 sm:p-6 lg:p-8 space-y-6">
+
+      <!-- Top Header Bar -->
+      <header class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200 dark:border-slate-800">
+        <div>
+          <h2 id="pageTitle" class="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">Dashboard</h2>
+          <p id="pageSubtitle" class="text-sm text-slate-500 dark:text-slate-400">ภาพรวมค่าใช้จ่ายและบิลล่าสุดภายในอุปกรณ์</p>
+        </div>
+        <div class="flex items-center space-x-3">
+          <!-- Quick Record Button -->
+          <button id="quickRecordBtn" class="flex items-center space-x-2 bg-brand-600 hover:bg-brand-700 active:scale-95 text-white text-sm font-medium px-4 py-2.5 rounded-xl shadow-lg shadow-brand-500/20 transition">
+            <i class="fa-solid fa-plus"></i>
+            <span data-i18n="quick_add">+ บันทึกบิล</span>
+          </button>
+          <!-- Quick Camera Launch Button -->
+          <button id="quickCameraBtn" class="flex items-center space-x-2 bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 dark:hover:bg-slate-600 active:scale-95 text-white text-sm font-medium px-3.5 py-2.5 rounded-xl shadow-md transition">
+            <i class="fa-solid fa-camera text-brand-400"></i>
+            <span class="hidden sm:inline" data-i18n="camera_btn">ถ่ายรูปบิล</span>
+          </button>
+        </div>
+      </header>
+
+      <!-- Dynamic Page Sections Container -->
+      <div id="pagesContainer" class="flex-1">
+
+        <!-- PAGE 1: DASHBOARD -->
+        <section id="page-dashboard" class="page-section space-y-6">
+          <!-- Summary Cards Grid -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-sm flex items-center space-x-4">
+              <div class="w-12 h-12 rounded-2xl bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-xl flex-shrink-0">
+                <i class="fa-solid fa-wallet"></i>
+              </div>
+              <div class="min-w-0">
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider" data-i18n="stat_total_spent">ยอดค่าใช้จ่ายรวม</p>
+                <h3 id="statTotalSpent" class="text-xl font-bold text-slate-900 dark:text-white truncate">0.00 ฿</h3>
+              </div>
+            </div>
+
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-sm flex items-center space-x-4">
+              <div class="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xl flex-shrink-0">
+                <i class="fa-solid fa-calendar-days"></i>
+              </div>
+              <div class="min-w-0">
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider" data-i18n="stat_month_spent">เดือนนี้</p>
+                <h3 id="statMonthSpent" class="text-xl font-bold text-slate-900 dark:text-white truncate">0.00 ฿</h3>
+              </div>
+            </div>
+
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-sm flex items-center space-x-4">
+              <div class="w-12 h-12 rounded-2xl bg-purple-100 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 flex items-center justify-center text-xl flex-shrink-0">
+                <i class="fa-solid fa-receipt"></i>
+              </div>
+              <div class="min-w-0">
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider" data-i18n="stat_total_bills">จำนวนบิลทั้งหมด</p>
+                <h3 id="statTotalBills" class="text-xl font-bold text-slate-900 dark:text-white truncate">0 รายการ</h3>
+              </div>
+            </div>
+
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-sm flex items-center space-x-4">
+              <div class="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center text-xl flex-shrink-0">
+                <i class="fa-solid fa-calculator"></i>
+              </div>
+              <div class="min-w-0">
+                <p class="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider" data-i18n="stat_avg_bill">เฉลี่ยต่อบิล</p>
+                <h3 id="statAvgSpent" class="text-xl font-bold text-slate-900 dark:text-white truncate">0.00 ฿</h3>
+              </div>
+            </div>
+          </div>
+
+          <!-- Main Dashboard Cards Grid -->
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+            <!-- Recent Bills List Card -->
+            <div class="lg:col-span-2 bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm p-5 space-y-4">
+              <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
+                <h3 class="font-bold text-base text-slate-900 dark:text-white flex items-center space-x-2">
+                  <i class="fa-solid fa-clock-rotate-left text-brand-500"></i>
+                  <span data-i18n="recent_bills">บิลล่าสุด</span>
+                </h3>
+                <button data-nav="bills" class="text-xs font-semibold text-brand-600 dark:text-brand-400 hover:underline">ดูทั้งหมด <i class="fa-solid fa-arrow-right text-[10px]"></i></button>
+              </div>
+
+              <!-- Bills Container -->
+              <div id="dashRecentBills" class="divide-y divide-slate-100 dark:divide-slate-700/50">
+                <!-- Rendered Dynamically -->
+              </div>
+            </div>
+
+            <!-- Category Expense Distribution Card -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-sm p-5 space-y-4">
+              <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
+                <h3 class="font-bold text-base text-slate-900 dark:text-white flex items-center space-x-2">
+                  <i class="fa-solid fa-chart-pie text-brand-500"></i>
+                  <span data-i18n="top_categories">หมวดหมู่ค่าใช้จ่าย</span>
+                </h3>
+              </div>
+
+              <!-- Top Categories Breakdown -->
+              <div id="dashCategoriesList" class="space-y-3">
+                <!-- Rendered Dynamically -->
+              </div>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- PAGE 2: RECORD BILL FORM -->
+        <section id="page-record" class="page-section hidden max-w-4xl mx-auto space-y-6">
+          <div class="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200/80 dark:border-slate-700/80 shadow-md p-6 sm:p-8">
+            <h3 id="recordFormTitle" class="text-xl font-bold text-slate-900 dark:text-white mb-6 pb-3 border-b border-slate-100 dark:border-slate-700 flex items-center space-x-3">
+              <span class="w-8 h-8 rounded-xl bg-brand-100 dark:bg-brand-900/60 text-brand-600 dark:text-brand-300 flex items-center justify-center text-sm">
+                <i class="fa-solid fa-plus"></i>
+              </span>
+              <span>บันทึกรายการบิลใหม่</span>
+            </h3>
+
+            <form id="billForm" class="space-y-6">
+              <input type="hidden" id="billId" value="">
+
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <!-- Shop Name -->
+                <div class="space-y-1.5">
+                  <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                    ชื่อร้านค้า / ผู้ให้บริการ <span class="text-red-500">*</span>
+                  </label>
+                  <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
+                      <i class="fa-solid fa-store"></i>
+                    </span>
+                    <input type="text" id="billShop" required placeholder="เช่น 7-Eleven, การไฟฟ้าส่วนภูมิภาค" class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-sm transition">
+                  </div>
+                </div>
+
+                <!-- Date -->
+                <div class="space-y-1.5">
+                  <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                    วันที่บนบิล <span class="text-red-500">*</span>
+                  </label>
+                  <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
+                      <i class="fa-solid fa-calendar"></i>
+                    </span>
+                    <input type="date" id="billDate" required class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-sm transition">
+                  </div>
+                </div>
+
+                <!-- Amount -->
+                <div class="space-y-1.5">
+                  <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                    จำนวนเงิน <span class="text-red-500">*</span>
+                  </label>
+                  <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400 font-bold" id="formCurrencyPrefix">฿</span>
+                    <input type="number" step="0.01" min="0" id="billAmount" required placeholder="0.00" class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-sm font-semibold transition">
+                  </div>
+                </div>
+
+                <!-- Category -->
+                <div class="space-y-1.5">
+                  <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+                    หมวดหมู่บิล <span class="text-red-500">*</span>
+                  </label>
+                  <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
+                      <i class="fa-solid fa-tag"></i>
+                    </span>
+                    <select id="billCategory" required class="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-sm transition appearance-none">
+                      <!-- Rendered Dynamically -->
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Description -->
+              <div class="space-y-1.5">
+                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">รายละเอียด / รายการสินค้า</label>
+                <textarea id="billDescription" rows="2" placeholder="รายละเอียดบิลย่อๆ เช่น ค่าน้ำเดือนกรกฎาคม, ซื้อของใช้เข้าบ้าน" class="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-sm transition"></textarea>
+              </div>
+
+              <!-- Note -->
+              <div class="space-y-1.5">
+                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">หมายเหตุเพิ่มเติม</label>
+                <input type="text" id="billNote" placeholder="เช่น ชำระด้วยบัตรเครดิต, เบิกคืนได้" class="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-brand-500 focus:border-brand-500 outline-none text-sm transition">
+              </div>
+
+              <!-- Image Upload & Camera Capture Area -->
+              <div class="space-y-2">
+                <label class="block text-xs font-semibold text-slate-700 dark:text-slate-300 uppercase tracking-wider">แนบรูปภาพบิล / ใบเสร็จ</label>
+                
+                <div class="flex flex-wrap items-center gap-3">
+                  <button type="button" id="openCameraModalBtn" class="flex items-center space-x-2 bg-slate-800 dark:bg-slate-700 hover:bg-slate-900 text-white px-4 py-2.5 rounded-xl text-sm font-medium transition shadow-sm">
+                    <i class="fa-solid fa-camera text-brand-400"></i>
+                    <span>ถ่ายรูปด้วยกล้อง</span>
+                  </button>
+
+                  <label class="cursor-pointer flex items-center space-x-2 bg-slate-100 dark:bg-slate-700/60 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 px-4 py-2.5 rounded-xl text-sm font-medium transition border border-slate-300/60 dark:border-slate-600">
+                    <i class="fa-solid fa-image text-blue-500"></i>
+                    <span>เลือกรูปจากเครื่อง</span>
+                    <input type="file" id="billFileInput" accept="image/*" class="hidden">
+                  </label>
+                </div>
+
+                <!-- Image Preview Area -->
+                <div id="imagePreviewContainer" class="hidden relative mt-4 rounded-2xl border-2 border-dashed border-slate-300 dark:border-slate-600 p-3 bg-slate-50 dark:bg-slate-900/50">
+                  <div class="relative group max-w-sm mx-auto overflow-hidden rounded-xl bg-slate-900">
+                    <img id="billImagePreview" src="" alt="Bill Preview" class="w-full max-h-80 object-contain mx-auto">
+                    
+                    <div class="absolute inset-0 bg-slate-900/50 opacity-0 group-hover:opacity-100 transition flex items-center justify-center space-x-3">
+                      <button type="button" id="rotatePreviewBtn" class="w-10 h-10 rounded-full bg-white/20 backdrop-blur-md text-white hover:bg-white/40 transition flex items-center justify-center" title="หมุนรูปภาพ">
+                        <i class="fa-solid fa-rotate-right"></i>
+                      </button>
+                      <button type="button" id="removeImageBtn" class="w-10 h-10 rounded-full bg-red-600/80 backdrop-blur-md text-white hover:bg-red-600 transition flex items-center justify-center" title="ลบรูปภาพ">
+                        <i class="fa-solid fa-trash"></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Form Buttons -->
+              <div class="flex items-center justify-end space-x-3 pt-4 border-t border-slate-100 dark:border-slate-700">
+                <button type="button" id="cancelFormBtn" class="px-5 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition">ยกเลิก</button>
+                <button type="submit" class="px-6 py-2.5 rounded-xl text-sm font-medium bg-brand-600 hover:bg-brand-700 text-white shadow-lg shadow-brand-500/25 active:scale-95 transition flex items-center space-x-2">
+                  <i class="fa-solid fa-floppy-disk"></i>
+                  <span>บันทึกข้อมูลบิล</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+
+        <!-- PAGE 3: BILL LIST -->
+        <section id="page-bills" class="page-section hidden space-y-4">
+          <!-- Toolbar & Sorting -->
+          <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center space-x-3 w-full sm:w-auto">
+              <span class="text-xs font-semibold text-slate-500 uppercase tracking-wider">เรียงลำดับ:</span>
+              <select id="listSortBy" class="bg-slate-100 dark:bg-slate-700 border-none text-xs font-medium text-slate-700 dark:text-slate-200 rounded-xl px-3 py-2 outline-none">
+                <option value="date-desc">วันที่ (ใหม่ไปเก่า)</option>
+                <option value="date-asc">วันที่ (เก่าไปใหม่)</option>
+                <option value="amount-desc">จำนวนเงิน (มากไปน้อย)</option>
+                <option value="amount-asc">จำนวนเงิน (น้อยไปมาก)</option>
+              </select>
+            </div>
+
+            <div class="flex items-center space-x-2 w-full sm:w-auto justify-end">
+              <span id="billListCount" class="text-xs text-slate-500 font-medium">พบ 0 รายการ</span>
+            </div>
+          </div>
+
+          <!-- Bills Grid / List Container -->
+          <div id="billsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Rendered Dynamically -->
+          </div>
+        </section>
+
+
+        <!-- PAGE 4: SEARCH BILL -->
+        <section id="page-search" class="page-section hidden space-y-6">
+          <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-700/80 shadow-sm space-y-4">
+            <h3 class="font-bold text-lg text-slate-900 dark:text-white flex items-center space-x-2">
+              <i class="fa-solid fa-sliders text-brand-500"></i>
+              <span>ค้นหาและกรองข้อมูลบิล</span>
+            </h3>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <!-- Keyword Search -->
+              <div class="space-y-1">
+                <label class="text-xs font-semibold text-slate-500 uppercase">คำค้นหา (ชื่อร้าน/หมายเหตุ)</label>
+                <input type="text" id="searchKeyword" placeholder="พิมพ์คำค้นหา..." class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm outline-none focus:ring-2 focus:ring-brand-500">
+              </div>
+
+              <!-- Category Filter -->
+              <div class="space-y-1">
+                <label class="text-xs font-semibold text-slate-500 uppercase">หมวดหมู่</label>
+                <select id="searchCategory" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm outline-none focus:ring-2 focus:ring-brand-500">
+                  <option value="">ทั้งหมด</option>
+                </select>
+              </div>
+
+              <!-- Date Shortcut Preset -->
+              <div class="space-y-1">
+                <label class="text-xs font-semibold text-slate-500 uppercase">ช่วงเวลา</label>
+                <select id="searchDatePreset" class="w-full px-3.5 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm outline-none focus:ring-2 focus:ring-brand-500">
+                  <option value="all">ทั้งหมด</option>
+                  <option value="today">วันนี้</option>
+                  <option value="week">สัปดาห์นี้</option>
+                  <option value="month">เดือนนี้</option>
+                  <option value="year">ปีนี้</option>
+                  <option value="custom">กำหนดช่วงวันที่เอง</option>
+                </select>
+              </div>
+
+              <!-- Reset Filters -->
+              <div class="flex items-end">
+                <button id="resetSearchBtn" class="w-full py-2 px-4 rounded-xl border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 text-sm font-medium transition flex items-center justify-center space-x-2">
+                  <i class="fa-solid fa-rotate-left"></i>
+                  <span>ล้างตัวกรอง</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Custom Date Range Controls -->
+            <div id="customDateRangeBox" class="hidden grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-700">
+              <div>
+                <label class="text-xs text-slate-500">ตั้งแต่วันที่:</label>
+                <input type="date" id="searchStartDate" class="w-full p-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm">
+              </div>
+              <div>
+                <label class="text-xs text-slate-500">ถึงวันที่:</label>
+                <input type="date" id="searchEndDate" class="w-full p-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm">
+              </div>
+            </div>
+          </div>
+
+          <!-- Search Results Header & Grid -->
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <h4 id="searchResultsHeader" class="font-bold text-slate-800 dark:text-slate-200 text-sm">ผลการค้นหา</h4>
+              <span id="searchResultSum" class="text-xs font-semibold text-brand-600 dark:text-brand-400">รวม 0.00 ฿</span>
+            </div>
+            <div id="searchResultsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <!-- Search items rendered dynamically -->
+            </div>
+          </div>
+        </section>
+
+
+        <!-- PAGE 5: CATEGORIES MANAGEMENT -->
+        <section id="page-categories" class="page-section hidden max-w-4xl mx-auto space-y-6">
+          <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-700/80 shadow-sm space-y-6">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-700">
+              <div>
+                <h3 class="font-bold text-lg text-slate-900 dark:text-white">จัดหมวดหมู่บิล</h3>
+                <p class="text-xs text-slate-500">จัดการ เพิ่ม แก้ไข หมวดหมู่บิลและสัญลักษณ์สี</p>
+              </div>
+              <button id="addCategoryBtn" class="bg-brand-600 hover:bg-brand-700 text-white text-xs font-medium px-3.5 py-2 rounded-xl transition flex items-center space-x-2">
+                <i class="fa-solid fa-plus"></i>
+                <span>เพิ่มหมวดหมู่</span>
+              </button>
+            </div>
+
+            <!-- Categories Grid -->
+            <div id="categoriesListGrid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+              <!-- Category items rendered dynamically -->
+            </div>
+          </div>
+        </section>
+
+
+        <!-- PAGE 6: DATA ANALYSIS -->
+        <section id="page-analysis" class="page-section hidden space-y-6">
+          <!-- Charts Summary Toolbar -->
+          <div class="bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-sm flex items-center justify-between">
+            <h3 class="font-bold text-base text-slate-900 dark:text-white flex items-center space-x-2">
+              <i class="fa-solid fa-chart-line text-brand-500"></i>
+              <span>บทวิเคราะห์ค่าใช้จ่าย (จริงจาก IndexedDB)</span>
+            </h3>
+            <span class="text-xs text-slate-400">คำนวณแบบ Real-time</span>
+          </div>
+
+          <!-- Charts Grid -->
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- Chart 1: Category Distribution -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-sm space-y-4">
+              <h4 class="font-bold text-sm text-slate-800 dark:text-slate-200">สัดส่วนค่าใช้จ่ายตามหมวดหมู่</h4>
+              <div class="relative h-64 flex items-center justify-center">
+                <canvas id="chartCategoryPie"></canvas>
+              </div>
+            </div>
+
+            <!-- Chart 2: Monthly Expenses Trend -->
+            <div class="bg-white dark:bg-slate-800 rounded-2xl p-5 border border-slate-200/80 dark:border-slate-700/80 shadow-sm space-y-4">
+              <h4 class="font-bold text-sm text-slate-800 dark:text-slate-200">แนวโน้มค่าใช้จ่ายรายเดือน</h4>
+              <div class="relative h-64 flex items-center justify-center">
+                <canvas id="chartMonthlyBar"></canvas>
+              </div>
+            </div>
+          </div>
+        </section>
+
+
+        <!-- PAGE 7: NOTIFICATIONS LOG -->
+        <section id="page-notifications" class="page-section hidden max-w-3xl mx-auto space-y-4">
+          <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-700/80 shadow-sm space-y-4">
+            <div class="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-700">
+              <h3 class="font-bold text-lg text-slate-900 dark:text-white flex items-center space-x-2">
+                <i class="fa-solid fa-bell text-brand-500"></i>
+                <span>ประวัติการแจ้งเตือนภายในระบบ</span>
+              </h3>
+              <button id="clearNotifsBtn" class="text-xs text-red-500 hover:underline">ล้างประวัติ</button>
+            </div>
+
+            <div id="notificationsLogList" class="divide-y divide-slate-100 dark:divide-slate-700/50 space-y-2">
+              <!-- Notification items rendered dynamically -->
+            </div>
+          </div>
+        </section>
+
+
+        <!-- PAGE 8: SETTINGS & DATA MANAGEMENT -->
+        <section id="page-settings" class="page-section hidden max-w-3xl mx-auto space-y-6">
+          <div class="bg-white dark:bg-slate-800 rounded-2xl p-6 border border-slate-200/80 dark:border-slate-700/80 shadow-sm space-y-6">
+            <h3 class="font-bold text-lg text-slate-900 dark:text-white pb-3 border-b border-slate-100 dark:border-slate-700">ตั้งค่าระบบและฐานข้อมูล</h3>
+
+            <!-- Appearance -->
+            <div class="space-y-3">
+              <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">ธีมการแสดงผล (Appearance)</h4>
+              <div class="grid grid-cols-3 gap-3">
+                <button data-theme-btn="light" class="theme-option p-3 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col items-center space-y-2 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-700">
+                  <i class="fa-solid fa-sun text-amber-500 text-lg"></i>
+                  <span>สว่าง (Light)</span>
+                </button>
+                <button data-theme-btn="dark" class="theme-option p-3 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col items-center space-y-2 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-700">
+                  <i class="fa-solid fa-moon text-indigo-400 text-lg"></i>
+                  <span>มืด (Dark)</span>
+                </button>
+                <button data-theme-btn="auto" class="theme-option p-3 rounded-xl border border-slate-200 dark:border-slate-700 flex flex-col items-center space-y-2 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-700">
+                  <i class="fa-solid fa-desktop text-slate-400 text-lg"></i>
+                  <span>ตามระบบ (Auto)</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Currency Settings -->
+            <div class="space-y-3">
+              <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">สกุลเงินแสดงผล (Currency)</h4>
+              <select id="settingCurrency" class="w-full p-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm outline-none">
+                <option value="THB">บาทไทย (THB ฿)</option>
+                <option value="USD">ดอลลาร์สหรัฐ (USD $)</option>
+                <option value="EUR">ยูโร (EUR €)</option>
+                <option value="JPY">เยนญี่ปุ่น (JPY ¥)</option>
+              </select>
+            </div>
+
+            <!-- Data Export & Backup -->
+            <div class="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-700">
+              <h4 class="text-xs font-semibold text-slate-500 uppercase tracking-wider">สำรองข้อมูล / นำเข้าข้อมูล (JSON Backup)</h4>
+              <div class="flex flex-wrap gap-3">
+                <button id="exportDataBtn" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-xs font-medium flex items-center space-x-2 transition">
+                  <i class="fa-solid fa-download"></i>
+                  <span>ส่งออกข้อมูลสำรอง (Export)</span>
+                </button>
+                <label class="cursor-pointer bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 text-slate-700 dark:text-slate-200 px-4 py-2 rounded-xl text-xs font-medium flex items-center space-x-2 transition border border-slate-300/60 dark:border-slate-600">
+                  <i class="fa-solid fa-upload"></i>
+                  <span>นำเข้าข้อมูล (Import)</span>
+                  <input type="file" id="importDataInput" accept=".json" class="hidden">
+                </label>
+              </div>
+            </div>
+
+            <!-- Clear Data & Reset -->
+            <div class="space-y-3 pt-4 border-t border-slate-100 dark:border-slate-700">
+              <h4 class="text-xs font-semibold text-red-500 uppercase tracking-wider">จัดการลบข้อมูล (Danger Zone)</h4>
+              <div class="flex flex-wrap gap-3">
+                <button id="clearBillsBtn" class="bg-red-100 hover:bg-red-200 dark:bg-red-950/40 dark:hover:bg-red-900/60 text-red-600 dark:text-red-400 border border-red-200 dark:border-red-900 px-4 py-2 rounded-xl text-xs font-medium transition">
+                  <i class="fa-solid fa-trash-can mr-1"></i> ล้างข้อมูลบิลทั้งหมด
+                </button>
+                <button id="resetAppBtn" class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-xl text-xs font-medium transition shadow-sm">
+                  <i class="fa-solid fa-arrows-rotate mr-1"></i> รีเซ็ตแอปพลิเคชันทั้งหมด
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+  </div>
+
+
+  <!-- MODAL 1: BILL CAMERA SYSTEM -->
+  <div id="cameraModal" class="fixed inset-0 z-50 hidden flex flex-col bg-black text-white">
+    <!-- Camera Viewport Header -->
+    <div class="p-4 bg-slate-900/80 backdrop-blur-md flex items-center justify-between z-10">
+      <h3 class="font-bold text-sm flex items-center space-x-2">
+        <i class="fa-solid fa-camera text-brand-400"></i>
+        <span>ถ่ายรูปบิลด้วยกล้อง</span>
+      </h3>
+      <button id="closeCameraModalBtn" class="w-9 h-9 rounded-full bg-slate-800 text-slate-300 hover:text-white flex items-center justify-center">
+        <i class="fa-solid fa-xmark text-lg"></i>
+      </button>
+    </div>
+
+    <!-- Live Stream Video / Viewfinder -->
+    <div class="relative flex-1 bg-black flex items-center justify-center overflow-hidden">
+      <video id="cameraVideo" autoplay playsinline class="w-full h-full object-contain"></video>
+      <div class="absolute inset-0 pointer-events-none viewfinder-grid opacity-30"></div>
+      
+      <!-- Canvas for image capture / crop preview -->
+      <canvas id="cameraCanvas" class="hidden max-w-full max-h-full object-contain"></canvas>
+    </div>
+
+    <!-- Camera Controls Footer Bar -->
+    <div class="p-6 bg-slate-900/90 backdrop-blur-md flex items-center justify-around z-10">
+      <button id="switchCameraBtn" class="w-12 h-12 rounded-full bg-slate-800 text-slate-200 hover:bg-slate-700 flex items-center justify-center text-lg">
+        <i class="fa-solid fa-camera-rotate"></i>
+      </button>
+
+      <!-- Main Capture Trigger -->
+      <button id="captureTriggerBtn" class="w-16 h-16 rounded-full bg-white ring-4 ring-white/30 active:scale-90 transition flex items-center justify-center">
+        <div class="w-13 h-13 rounded-full border-2 border-slate-900"></div>
+      </button>
+
+      <!-- Confirm Captured Canvas (hidden until captured) -->
+      <button id="confirmCapturedBtn" class="hidden w-12 h-12 rounded-full bg-brand-600 text-white hover:bg-brand-500 flex items-center justify-center text-lg shadow-lg">
+        <i class="fa-solid fa-check"></i>
+      </button>
+    </div>
+  </div>
+
+
+  <!-- MODAL 2: BILL DETAIL VIEW MODAL -->
+  <div id="detailModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-slate-900/70 backdrop-blur-sm p-4 overflow-y-auto">
+    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-200 dark:border-slate-700">
+      <div class="p-4 border-b border-slate-100 dark:border-slate-700 flex items-center justify-between">
+        <h3 id="detailShopTitle" class="font-bold text-lg text-slate-900 dark:text-white">รายละเอียดบิล</h3>
+        <button id="closeDetailModalBtn" class="p-1 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+          <i class="fa-solid fa-xmark text-xl"></i>
+        </button>
+      </div>
+
+      <div class="p-6 overflow-y-auto space-y-6">
+        <!-- Detail Image Container -->
+        <div id="detailImageWrapper" class="hidden rounded-xl overflow-hidden bg-slate-900 max-h-96 flex items-center justify-center">
+          <img id="detailImage" src="" alt="Bill Image" class="max-h-96 object-contain cursor-zoom-in">
+        </div>
+
+        <!-- Detail Attributes Grid -->
+        <div class="grid grid-cols-2 gap-4 text-sm">
+          <div>
+            <span class="text-xs font-semibold text-slate-400 uppercase">วันที่:</span>
+            <p id="detailDate" class="font-medium text-slate-800 dark:text-slate-200">-</p>
+          </div>
+          <div>
+            <span class="text-xs font-semibold text-slate-400 uppercase">หมวดหมู่:</span>
+            <div id="detailCategoryBadge" class="mt-0.5">-</div>
+          </div>
+          <div>
+            <span class="text-xs font-semibold text-slate-400 uppercase">จำนวนเงิน:</span>
+            <p id="detailAmount" class="text-xl font-bold text-brand-600 dark:text-brand-400">0.00 ฿</p>
+          </div>
+          <div>
+            <span class="text-xs font-semibold text-slate-400 uppercase">สร้างเมื่อ:</span>
+            <p id="detailCreatedAt" class="font-medium text-slate-500 text-xs">-</p>
+          </div>
+        </div>
+
+        <div>
+          <span class="text-xs font-semibold text-slate-400 uppercase">รายละเอียด:</span>
+          <p id="detailDescription" class="text-sm text-slate-700 dark:text-slate-300 mt-1 whitespace-pre-line">-</p>
+        </div>
+
+        <div>
+          <span class="text-xs font-semibold text-slate-400 uppercase">หมายเหตุ:</span>
+          <p id="detailNote" class="text-sm text-slate-700 dark:text-slate-300 mt-1">-</p>
+        </div>
+      </div>
+
+      <!-- Detail Actions -->
+      <div class="p-4 border-t border-slate-100 dark:border-slate-700 flex items-center justify-end space-x-3 bg-slate-50 dark:bg-slate-900/50">
+        <button id="editDetailBtn" class="px-4 py-2 rounded-xl text-xs font-medium bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-800 dark:text-slate-100 transition">
+          <i class="fa-solid fa-pen-to-square mr-1"></i> แก้ไขข้อมูล
+        </button>
+        <button id="deleteDetailBtn" class="px-4 py-2 rounded-xl text-xs font-medium bg-red-600 hover:bg-red-700 text-white transition">
+          <i class="fa-solid fa-trash mr-1"></i> ลบบิลนี้
+        </button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- MODAL 3: CATEGORY EDIT/ADD MODAL -->
+  <div id="categoryModal" class="fixed inset-0 z-50 hidden flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+    <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-700">
+      <h3 id="catModalTitle" class="text-lg font-bold text-slate-900 dark:text-white mb-4">เพิ่มหมวดหมู่ใหม่</h3>
+      
+      <form id="catForm" class="space-y-4">
+        <input type="hidden" id="catId" value="">
+        
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">ชื่อหมวดหมู่</label>
+          <input type="text" id="catName" required placeholder="เช่น ค่าน้ำ, ค่าไฟ" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">สีหมวดหมู่</label>
+          <input type="color" id="catColor" value="#22c55e" class="w-full h-10 p-1 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 cursor-pointer">
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-500 uppercase mb-1">ไอคอน (FontAwesome Class)</label>
+          <input type="text" id="catIcon" value="fa-solid fa-tag" placeholder="fa-solid fa-bolt" class="w-full px-3 py-2 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-sm">
+        </div>
+
+        <div class="flex items-center justify-end space-x-3 pt-4">
+          <button type="button" id="closeCatModalBtn" class="px-4 py-2 text-xs font-medium text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-xl">ยกเลิก</button>
+          <button type="submit" class="px-4 py-2 text-xs font-medium bg-brand-600 hover:bg-brand-700 text-white rounded-xl shadow">บันทึกหมวดหมู่</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+
+  <!-- MAIN JAVASCRIPT APPLICATION ARCHITECTURE -->
+  <script>
+    /* Standalone Bill Tracker Engine V.2.0.0 */
+
+    // Global App Configuration & State
+    const APP_DB_NAME = 'BillTrackerDB_v2';
+    const APP_DB_VERSION = 1;
+    let db = null;
+
+    let appState = {
+      bills: [],
+      categories: [],
+      notifications: [],
+      settings: {
+        theme: 'auto',
+        currency: 'THB',
+        language: 'TH'
+      },
+      currentCategoryEdit: null,
+      activeBillDetailId: null,
+      capturedBlob: null,
+      cameraStream: null,
+      facingMode: 'environment'
+    };
+
+    // Default Seed Categories
+    const DEFAULT_CATEGORIES = [
+      { id: 'cat_water', name: 'Water (ค่าน้ำ)', color: '#3b82f6', icon: 'fa-solid fa-droplet' },
+      { id: 'cat_electricity', name: 'Electricity (ค่าไฟ)', color: '#eab308', icon: 'fa-solid fa-bolt' },
+      { id: 'cat_internet', name: 'Internet (อินเทอร์เน็ต)', color: '#a855f7', icon: 'fa-solid fa-wifi' },
+      { id: 'cat_telephone', name: 'Telephone (ค่าโทรศัพท์)', color: '#ec4899', icon: 'fa-solid fa-phone' },
+      { id: 'cat_food', name: 'Food (อาหาร/เครื่องดื่ม)', color: '#ef4444', icon: 'fa-solid fa-utensils' },
+      { id: 'cat_transportation', name: 'Transportation (การเดินทาง)', color: '#f97316', icon: 'fa-solid fa-car' },
+      { id: 'cat_shopping', name: 'Shopping (ช้อปปิ้ง)', color: '#10b981', icon: 'fa-solid fa-bag-shopping' },
+      { id: 'cat_other', name: 'Other (อื่นๆ)', color: '#64748b', icon: 'fa-solid fa-receipt' }
+    ];
+
+    // Currency Symbols Lookup Map
+    const CURRENCY_SYMBOLS = {
+      THB: '฿',
+      USD: '$',
+      EUR: '€',
+      JPY: '¥'
+    };
+
+
+    /* INDEXEDDB SERVICE LAYER */
+    const DBService = {
+      init() {
+        return new Promise((resolve, reject) => {
+          const request = indexedDB.open(APP_DB_NAME, APP_DB_VERSION);
+
+          request.onupgradeneeded = (e) => {
+            const database = e.target.result;
+
+            // Bills ObjectStore
+            if (!database.objectStoreNames.contains('bills')) {
+              const billStore = database.createObjectStore('bills', { keyPath: 'id' });
+              billStore.createIndex('date', 'date', { unique: false });
+              billStore.createIndex('category', 'category', { unique: false });
+            }
+
+            // Categories ObjectStore
+            if (!database.objectStoreNames.contains('categories')) {
+              database.createObjectStore('categories', { keyPath: 'id' });
+            }
+
+            // Notifications ObjectStore
+            if (!database.objectStoreNames.contains('notifications')) {
+              database.createObjectStore('notifications', { keyPath: 'id' });
+            }
+          };
+
+          request.onsuccess = async (e) => {
+            db = e.target.result;
+            await DBService.seedCategoriesIfEmpty();
+            resolve(db);
+          };
+
+          request.onerror = (e) => {
+            console.error('IndexedDB Error:', e.target.error);
+            reject(e.target.error);
+          };
+        });
+      },
+
+      async seedCategoriesIfEmpty() {
+        const cats = await DBService.getAll('categories');
+        if (cats.length === 0) {
+          const tx = db.transaction('categories', 'readwrite');
+          const store = tx.objectStore('categories');
+          DEFAULT_CATEGORIES.forEach(c => store.add(c));
+          return new Promise(r => tx.oncomplete = r);
+        }
+      },
+
+      getAll(storeName) {
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(storeName, 'readonly');
+          const store = tx.objectStore(storeName);
+          const req = store.getAll();
+          req.onsuccess = () => resolve(req.result || []);
+          req.onerror = () => reject(req.error);
+        });
+      },
+
+      saveItem(storeName, item) {
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(storeName, 'readwrite');
+          const store = tx.objectStore(storeName);
+          const req = store.put(item);
+          req.onsuccess = () => resolve(item);
+          req.onerror = () => reject(req.error);
+        });
+      },
+
+      deleteItem(storeName, id) {
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(storeName, 'readwrite');
+          const store = tx.objectStore(storeName);
+          const req = store.delete(id);
+          req.onsuccess = () => resolve(id);
+          req.onerror = () => reject(req.error);
+        });
+      },
+
+      clearStore(storeName) {
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(storeName, 'readwrite');
+          const store = tx.objectStore(storeName);
+          const req = store.clear();
+          req.onsuccess = () => resolve();
+          req.onerror = () => reject(req.error);
+        });
+      }
+    };
+
+
+    /* NOTIFICATION & TOAST SERVICE */
+    const NotificationService = {
+      showToast(message, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        const toast = document.createElement('div');
+
+        let bgColor = 'bg-slate-800 text-white';
+        let icon = 'fa-info-circle text-blue-400';
+
+        if (type === 'success') {
+          bgColor = 'bg-emerald-900/90 text-emerald-100 border border-emerald-700/50';
+          icon = 'fa-circle-check text-emerald-400';
+        } else if (type === 'error') {
+          bgColor = 'bg-red-900/90 text-red-100 border border-red-700/50';
+          icon = 'fa-circle-exclamation text-red-400';
+        } else if (type === 'warning') {
+          bgColor = 'bg-amber-900/90 text-amber-100 border border-amber-700/50';
+          icon = 'fa-triangle-exclamation text-amber-400';
+        }
+
+        toast.className = `p-4 rounded-2xl shadow-xl flex items-center space-x-3 text-xs font-medium backdrop-blur-md transform transition-all duration-300 pointer-events-auto ${bgColor}`;
+        toast.innerHTML = `
+          <i class="fa-solid ${icon} text-lg"></i>
+          <span class="flex-1">${message}</span>
+          <button class="text-slate-400 hover:text-white" onclick="this.parentElement.remove()"><i class="fa-solid fa-xmark"></i></button>
+        `;
+
+        container.appendChild(toast);
+
+        // Record in IndexedDB Log
+        const logEntry = {
+          id: 'notif_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+          message,
+          type,
+          timestamp: new Date().toISOString()
+        };
+        DBService.saveItem('notifications', logEntry).then(() => {
+          appState.notifications.unshift(logEntry);
+          UIService.renderNotifications();
+        });
+
+        setTimeout(() => {
+          toast.classList.add('opacity-0', 'scale-95');
+          setTimeout(() => toast.remove(), 300);
+        }, 4000);
+      }
+    };
+
+
+    /* CONFIRMATION DIALOG MODAL HELPER */
+    const ConfirmModal = {
+      show(title, message, onConfirm) {
+        document.getElementById('confirmModalTitle').textContent = title;
+        document.getElementById('confirmModalMessage').textContent = message;
+        
+        const modal = document.getElementById('confirmModal');
+        const confirmBtn = document.getElementById('confirmActionBtn');
+        const cancelBtn = document.getElementById('confirmCancelBtn');
+
+        modal.classList.remove('hidden');
+
+        const cleanup = () => {
+          modal.classList.add('hidden');
+          confirmBtn.onclick = null;
+          cancelBtn.onclick = null;
+        };
+
+        confirmBtn.onclick = () => {
+          cleanup();
+          onConfirm();
+        };
+
+        cancelBtn.onclick = cleanup;
+      }
+    };
+
+
+    /* CAMERA & IMAGE PROCESSING SERVICE */
+    const CameraService = {
+      async startCamera() {
+        try {
+          const constraints = {
+            video: {
+              facingMode: appState.facingMode,
+              width: { ideal: 1920 },
+              height: { ideal: 1080 }
+            }
+          };
+
+          appState.cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+          const video = document.getElementById('cameraVideo');
+          video.srcObject = appState.cameraStream;
+          video.classList.remove('hidden');
+          document.getElementById('cameraCanvas').classList.add('hidden');
+          document.getElementById('confirmCapturedBtn').classList.add('hidden');
+          document.getElementById('captureTriggerBtn').classList.remove('hidden');
+        } catch (err) {
+          console.error('Camera Error:', err);
+          NotificationService.showToast('ไม่สามารถเปิดกล้องได้ โปรดอนุญาตสิทธิ์ใช้งานกล้อง', 'error');
+        }
+      },
+
+      stopCamera() {
+        if (appState.cameraStream) {
+          appState.cameraStream.getTracks().forEach(track => track.stop());
+          appState.cameraStream = null;
+        }
+      },
+
+      captureFrame() {
+        const video = document.getElementById('cameraVideo');
+        const canvas = document.getElementById('cameraCanvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = video.videoWidth || 1280;
+        canvas.height = video.videoHeight || 720;
+
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+        video.classList.add('hidden');
+        canvas.classList.remove('hidden');
+
+        // Toggle Buttons
+        document.getElementById('captureTriggerBtn').classList.add('hidden');
+        document.getElementById('confirmCapturedBtn').classList.remove('hidden');
+
+        // Stop live stream
+        CameraService.stopCamera();
+
+        // Convert canvas to blob
+        canvas.toBlob((blob) => {
+          appState.capturedBlob = blob;
+        }, 'image/jpeg', 0.85);
+      }
+    };
+
+
+    /* UI MANAGER & RENDER ENGINE */
+    const UIService = {
+      chartCategoryPie: null,
+      chartMonthlyBar: null,
+
+      init() {
+        // Nav Links Handler
+        document.querySelectorAll('[data-nav]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const page = btn.getAttribute('data-nav');
+            UIService.switchPage(page);
+          });
+        });
+
+        // Mobile Menu Toggle
+        document.getElementById('mobileMenuBtn').addEventListener('click', () => {
+          document.getElementById('navMenu').classList.toggle('hidden');
+        });
+
+        // Set default date picker to today
+        document.getElementById('billDate').value = new Date().toISOString().split('T')[0];
+
+        // Form Submit
+        document.getElementById('billForm').addEventListener('submit', UIService.handleBillFormSubmit);
+
+        // File Input Upload
+        document.getElementById('billFileInput').addEventListener('change', UIService.handleFileInput);
+
+        // Camera Modal
+        document.getElementById('openCameraModalBtn').addEventListener('click', () => {
+          document.getElementById('cameraModal').classList.remove('hidden');
+          CameraService.startCamera();
+        });
+        document.getElementById('quickCameraBtn').addEventListener('click', () => {
+          document.getElementById('cameraModal').classList.remove('hidden');
+          CameraService.startCamera();
+        });
+        document.getElementById('closeCameraModalBtn').addEventListener('click', () => {
+          CameraService.stopCamera();
+          document.getElementById('cameraModal').classList.add('hidden');
+        });
+        document.getElementById('captureTriggerBtn').addEventListener('click', CameraService.captureFrame);
+        document.getElementById('confirmCapturedBtn').addEventListener('click', () => {
+          if (appState.capturedBlob) {
+            UIService.setPreviewImageFromBlob(appState.capturedBlob);
+            NotificationService.showToast('ถ่ายรูปบิลสำเร็จ', 'success');
+          }
+          document.getElementById('cameraModal').classList.add('hidden');
+        });
+        document.getElementById('switchCameraBtn').addEventListener('click', () => {
+          appState.facingMode = appState.facingMode === 'environment' ? 'user' : 'environment';
+          CameraService.stopCamera();
+          CameraService.startCamera();
+        });
+
+        // Image Preview Controls
+        document.getElementById('removeImageBtn').addEventListener('click', () => {
+          appState.capturedBlob = null;
+          document.getElementById('imagePreviewContainer').classList.add('hidden');
+          document.getElementById('billFileInput').value = '';
+        });
+
+        // Detail Modal Close
+        document.getElementById('closeDetailModalBtn').addEventListener('click', () => {
+          document.getElementById('detailModal').classList.add('hidden');
+        });
+
+        // Quick Add Button
+        document.getElementById('quickRecordBtn').addEventListener('click', () => {
+          UIService.resetBillForm();
+          UIService.switchPage('record');
+        });
+
+        // Search & Filters Listeners
+        ['searchKeyword', 'searchCategory', 'searchDatePreset', 'searchStartDate', 'searchEndDate'].forEach(id => {
+          document.getElementById(id).addEventListener('input', UIService.renderSearchResults);
+          document.getElementById(id).addEventListener('change', UIService.renderSearchResults);
+        });
+
+        document.getElementById('searchDatePreset').addEventListener('change', (e) => {
+          const customBox = document.getElementById('customDateRangeBox');
+          if (e.target.value === 'custom') {
+            customBox.classList.remove('hidden');
+          } else {
+            customBox.classList.add('hidden');
+          }
+        });
+
+        document.getElementById('resetSearchBtn').addEventListener('click', () => {
+          document.getElementById('searchKeyword').value = '';
+          document.getElementById('searchCategory').value = '';
+          document.getElementById('searchDatePreset').value = 'all';
+          document.getElementById('customDateRangeBox').classList.add('hidden');
+          UIService.renderSearchResults();
+        });
+
+        // List Sorting Listener
+        document.getElementById('listSortBy').addEventListener('change', UIService.renderBillsList);
+
+        // Category Modal Actions
+        document.getElementById('addCategoryBtn').addEventListener('click', () => {
+          document.getElementById('catId').value = '';
+          document.getElementById('catName').value = '';
+          document.getElementById('catColor').value = '#22c55e';
+          document.getElementById('catIcon').value = 'fa-solid fa-tag';
+          document.getElementById('catModalTitle').textContent = 'เพิ่มหมวดหมู่ใหม่';
+          document.getElementById('categoryModal').classList.remove('hidden');
+        });
+        document.getElementById('closeCatModalBtn').addEventListener('click', () => {
+          document.getElementById('categoryModal').classList.add('hidden');
+        });
+        document.getElementById('catForm').addEventListener('submit', UIService.handleCategoryFormSubmit);
+
+        // Settings Buttons & Theme
+        document.querySelectorAll('[data-theme-btn]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const theme = btn.getAttribute('data-theme-btn');
+            UIService.applyTheme(theme);
+          });
+        });
+
+        document.getElementById('settingCurrency').addEventListener('change', (e) => {
+          appState.settings.currency = e.target.value;
+          localStorage.setItem('billtracker_currency', e.target.value);
+          UIService.updateCurrencyUI();
+          UIService.refreshAllViews();
+          NotificationService.showToast(`เปลี่ยนสกุลเงินเป็น ${e.target.value}`, 'info');
+        });
+
+        document.getElementById('clearNotifsBtn').addEventListener('click', async () => {
+          await DBService.clearStore('notifications');
+          appState.notifications = [];
+          UIService.renderNotifications();
+          NotificationService.showToast('ล้างประวัติการแจ้งเตือนแล้ว', 'info');
+        });
+
+        // Clear Bills & Reset App
+        document.getElementById('clearBillsBtn').addEventListener('click', () => {
+          ConfirmModal.show('ยืนยันล้างข้อมูลบิลทั้งหมด', 'คุณแน่ใจหรือไม่ว่าต้องการลบข้อมูลบิลและรูปภาพทั้งหมด? ข้อมูลนี้ไม่สามารถกู้คืนได้', async () => {
+            await DBService.clearStore('bills');
+            appState.bills = [];
+            UIService.refreshAllViews();
+            NotificationService.showToast('ล้างข้อมูลบิลทั้งหมดแล้ว', 'warning');
+          });
+        });
+
+        document.getElementById('resetAppBtn').addEventListener('click', () => {
+          ConfirmModal.show('ยืนยันรีเซ็ตแอปพลิเคชัน', 'การรีเซ็ตจะลบข้อมูลบิล หมวดหมู่ และการตั้งค่าทั้งหมดกลับเป็นค่าเริ่มต้น', async () => {
+            await DBService.clearStore('bills');
+            await DBService.clearStore('categories');
+            await DBService.clearStore('notifications');
+            localStorage.clear();
+            location.reload();
+          });
+        });
+
+        // JSON Backup Export / Import
+        document.getElementById('exportDataBtn').addEventListener('click', UIService.exportDataJSON);
+        document.getElementById('importDataInput').addEventListener('change', UIService.importDataJSON);
+      },
+
+      switchPage(pageId) {
+        document.querySelectorAll('.page-section').forEach(sec => sec.classList.add('hidden'));
+        const targetPage = document.getElementById(`page-${pageId}`);
+        if (targetPage) targetPage.classList.remove('hidden');
+
+        // Highlight Active Nav
+        document.querySelectorAll('.nav-btn').forEach(btn => {
+          if (btn.getAttribute('data-nav') === pageId) {
+            btn.className = 'nav-btn active flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/40';
+          } else {
+            btn.className = 'nav-btn flex items-center space-x-3 px-3.5 py-2.5 rounded-xl text-sm font-medium transition text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50';
+          }
+        });
+
+        // Update Header Title
+        const pageTitles = {
+          dashboard: 'Dashboard',
+          record: 'บันทึกบิลใหม่',
+          bills: 'รายการบิลทั้งหมด',
+          search: 'ค้นหาและกรองบิล',
+          categories: 'จัดการหมวดหมู่',
+          analysis: 'วิเคราะห์ค่าใช้จ่าย',
+          notifications: 'การแจ้งเตือน',
+          settings: 'ตั้งค่าระบบ'
+        };
+        document.getElementById('pageTitle').textContent = pageTitles[pageId] || 'Dashboard';
+
+        // Specific Page Renders
+        if (pageId === 'analysis') UIService.renderAnalysisCharts();
+      },
+
+      applyTheme(theme) {
+        appState.settings.theme = theme;
+        localStorage.setItem('billtracker_theme', theme);
+
+        const isDark = theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        if (isDark) {
+          document.documentElement.classList.add('dark');
+        } else {
+          document.documentElement.classList.remove('dark');
+        }
+      },
+
+      updateCurrencyUI() {
+        const symbol = CURRENCY_SYMBOLS[appState.settings.currency] || '฿';
+        document.getElementById('currentCurrencyLabel').textContent = `${appState.settings.currency} (${symbol})`;
+        document.getElementById('formCurrencyPrefix').textContent = symbol;
+      },
+
+      formatMoney(amount) {
+        const symbol = CURRENCY_SYMBOLS[appState.settings.currency] || '฿';
+        return `${Number(amount).toLocaleString('th-TH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${symbol}`;
+      },
+
+      setPreviewImageFromBlob(blob) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = document.getElementById('billImagePreview');
+          img.src = e.target.result;
+          document.getElementById('imagePreviewContainer').classList.remove('hidden');
+        };
+        reader.readAsDataURL(blob);
+      },
+
+      handleFileInput(e) {
+        const file = e.target.files[0];
+        if (file) {
+          appState.capturedBlob = file;
+          UIService.setPreviewImageFromBlob(file);
+        }
+      },
+
+      resetBillForm() {
+        document.getElementById('billId').value = '';
+        document.getElementById('billShop').value = '';
+        document.getElementById('billDate').value = new Date().toISOString().split('T')[0];
+        document.getElementById('billAmount').value = '';
+        document.getElementById('billDescription').value = '';
+        document.getElementById('billNote').value = '';
+        document.getElementById('imagePreviewContainer').classList.add('hidden');
+        document.getElementById('recordFormTitle').innerHTML = `
+          <span class="w-8 h-8 rounded-xl bg-brand-100 dark:bg-brand-900/60 text-brand-600 dark:text-brand-300 flex items-center justify-center text-sm">
+            <i class="fa-solid fa-plus"></i>
+          </span>
+          <span>บันทึกรายการบิลใหม่</span>
+        `;
+        appState.capturedBlob = null;
+      },
+
+      async handleBillFormSubmit(e) {
+        e.preventDefault();
+
+        const id = document.getElementById('billId').value || ('bill_' + Date.now());
+        const shopName = document.getElementById('billShop').value.trim();
+        const date = document.getElementById('billDate').value;
+        const amount = parseFloat(document.getElementById('billAmount').value);
+        const category = document.getElementById('billCategory').value;
+        const description = document.getElementById('billDescription').value.trim();
+        const note = document.getElementById('billNote').value.trim();
+
+        if (!shopName || !date || isNaN(amount) || amount <= 0) {
+          NotificationService.showToast('กรุณากรอกข้อมูลบิลให้ครบถ้วนและถูกต้อง', 'warning');
+          return;
+        }
+
+        const isEdit = !!document.getElementById('billId').value;
+        const existingBill = isEdit ? appState.bills.find(b => b.id === id) : null;
+
+        const billData = {
+          id,
+          shopName,
+          date,
+          amount,
+          category,
+          description,
+          note,
+          currency: appState.settings.currency,
+          imageBlob: appState.capturedBlob || (existingBill ? existingBill.imageBlob : null),
+          createdAt: existingBill ? existingBill.createdAt : new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        };
+
+        await DBService.saveItem('bills', billData);
+
+        if (isEdit) {
+          const idx = appState.bills.findIndex(b => b.id === id);
+          if (idx !== -1) appState.bills[idx] = billData;
+          NotificationService.showToast('แก้ไขข้อมูลบิลเรียบร้อยแล้ว', 'success');
+        } else {
+          appState.bills.unshift(billData);
+          NotificationService.showToast('บันทึกบิลใหม่สำเร็จแล้ว', 'success');
+        }
+
+        UIService.resetBillForm();
+        UIService.refreshAllViews();
+        UIService.switchPage('bills');
+      },
+
+      renderDashboard() {
+        const totalSpent = appState.bills.reduce((sum, b) => sum + b.amount, 0);
+        
+        // Current Month calculation
+        const now = new Date();
+        const curYear = now.getFullYear();
+        const curMonth = now.getMonth();
+        const monthSpent = appState.bills
+          .filter(b => {
+            const d = new Date(b.date);
+            return d.getFullYear() === curYear && d.getMonth() === curMonth;
+          })
+          .reduce((sum, b) => sum + b.amount, 0);
+
+        const avgSpent = appState.bills.length > 0 ? (totalSpent / appState.bills.length) : 0;
+
+        document.getElementById('statTotalSpent').textContent = UIService.formatMoney(totalSpent);
+        document.getElementById('statMonthSpent').textContent = UIService.formatMoney(monthSpent);
+        document.getElementById('statTotalBills').textContent = `${appState.bills.length} รายการ`;
+        document.getElementById('statAvgSpent').textContent = UIService.formatMoney(avgSpent);
+
+        // Render Recent 5 Bills
+        const recentContainer = document.getElementById('dashRecentBills');
+        recentContainer.innerHTML = '';
+
+        if (appState.bills.length === 0) {
+          recentContainer.innerHTML = `
+            <div class="py-8 text-center text-slate-400">
+              <i class="fa-solid fa-receipt text-3xl mb-2 block text-slate-300 dark:text-slate-600"></i>
+              <p class="text-sm">ยังไม่มีข้อมูลบิลในระบบ</p>
+            </div>
+          `;
+        } else {
+          const recent = [...appState.bills].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 5);
+          recent.forEach(bill => {
+            const cat = appState.categories.find(c => c.id === bill.category) || { name: 'อื่นๆ', color: '#64748b', icon: 'fa-solid fa-tag' };
+            const item = document.createElement('div');
+            item.className = 'py-3 flex items-center justify-between cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-700/30 px-2 rounded-xl transition';
+            item.onclick = () => UIService.openDetailModal(bill.id);
+
+            item.innerHTML = `
+              <div class="flex items-center space-x-3 min-w-0">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm flex-shrink-0" style="background-color: ${cat.color}">
+                  <i class="${cat.icon}"></i>
+                </div>
+                <div class="min-w-0">
+                  <h4 class="font-bold text-sm text-slate-900 dark:text-white truncate">${bill.shopName}</h4>
+                  <p class="text-xs text-slate-400">${bill.date} • ${cat.name}</p>
+                </div>
+              </div>
+              <div class="font-bold text-sm text-slate-900 dark:text-white flex-shrink-0 ml-2">
+                ${UIService.formatMoney(bill.amount)}
+              </div>
+            `;
+            recentContainer.appendChild(item);
+          });
+        }
+
+        // Render Top Categories Breakdown
+        const catMap = {};
+        appState.bills.forEach(b => {
+          catMap[b.category] = (catMap[b.category] || 0) + b.amount;
+        });
+
+        const catContainer = document.getElementById('dashCategoriesList');
+        catContainer.innerHTML = '';
+
+        const catSorted = Object.keys(catMap).sort((a, b) => catMap[b] - catMap[a]);
+        if (catSorted.length === 0) {
+          catContainer.innerHTML = `<p class="text-xs text-slate-400 text-center py-4">ไม่มีข้อมูลหมวดหมู่</p>`;
+        } else {
+          catSorted.forEach(catId => {
+            const amt = catMap[catId];
+            const percent = totalSpent > 0 ? Math.round((amt / totalSpent) * 100) : 0;
+            const cat = appState.categories.find(c => c.id === catId) || { name: 'อื่นๆ', color: '#64748b' };
+
+            const el = document.createElement('div');
+            el.className = 'space-y-1';
+            el.innerHTML = `
+              <div class="flex items-center justify-between text-xs font-medium">
+                <span class="text-slate-700 dark:text-slate-300">${cat.name}</span>
+                <span class="text-slate-500">${UIService.formatMoney(amt)} (${percent}%)</span>
+              </div>
+              <div class="w-full h-2 bg-slate-100 dark:bg-slate-700 rounded-full overflow-hidden">
+                <div class="h-full rounded-full transition-all duration-500" style="width: ${percent}%; background-color: ${cat.color}"></div>
+              </div>
+            `;
+            catContainer.appendChild(el);
+          });
+        }
+      },
+
+      renderBillsList() {
+        const grid = document.getElementById('billsGrid');
+        grid.innerHTML = '';
+
+        const sortBy = document.getElementById('listSortBy').value;
+        let sorted = [...appState.bills];
+
+        if (sortBy === 'date-desc') sorted.sort((a, b) => new Date(b.date) - new Date(a.date));
+        else if (sortBy === 'date-asc') sorted.sort((a, b) => new Date(a.date) - new Date(b.date));
+        else if (sortBy === 'amount-desc') sorted.sort((a, b) => b.amount - a.amount);
+        else if (sortBy === 'amount-asc') sorted.sort((a, b) => a.amount - b.amount);
+
+        document.getElementById('billListCount').textContent = `พบ ${sorted.length} รายการ`;
+
+        if (sorted.length === 0) {
+          grid.innerHTML = `
+            <div class="col-span-full py-12 text-center text-slate-400 bg-white dark:bg-slate-800 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700">
+              <i class="fa-solid fa-receipt text-4xl mb-3 text-slate-300 dark:text-slate-600"></i>
+              <p class="text-sm font-medium">ไม่พบบิลในรายการ</p>
+              <button data-nav="record" onclick="UIService.switchPage('record')" class="mt-3 text-xs text-brand-600 dark:text-brand-400 font-bold hover:underline">+ บันทึกบิลใหม่</button>
+            </div>
+          `;
+          return;
+        }
+
+        sorted.forEach(bill => {
+          const cat = appState.categories.find(c => c.id === bill.category) || { name: 'อื่นๆ', color: '#64748b', icon: 'fa-solid fa-tag' };
+          const card = document.createElement('div');
+          card.className = 'bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:shadow-md transition flex flex-col justify-between space-y-3 cursor-pointer';
+          card.onclick = () => UIService.openDetailModal(bill.id);
+
+          card.innerHTML = `
+            <div class="flex items-start justify-between space-x-2">
+              <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm" style="background-color: ${cat.color}">
+                  <i class="${cat.icon}"></i>
+                </div>
+                <div class="min-w-0">
+                  <h4 class="font-bold text-sm text-slate-900 dark:text-white truncate">${bill.shopName}</h4>
+                  <span class="text-[10px] px-2 py-0.5 rounded-full font-semibold text-white" style="background-color: ${cat.color}">${cat.name}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex items-end justify-between pt-2 border-t border-slate-100 dark:border-slate-700/60">
+              <span class="text-xs text-slate-400"><i class="fa-regular fa-calendar mr-1"></i>${bill.date}</span>
+              <span class="text-base font-bold text-slate-900 dark:text-white">${UIService.formatMoney(bill.amount)}</span>
+            </div>
+          `;
+          grid.appendChild(card);
+        });
+      },
+
+      renderSearchResults() {
+        const keyword = document.getElementById('searchKeyword').value.toLowerCase().trim();
+        const category = document.getElementById('searchCategory').value;
+        const datePreset = document.getElementById('searchDatePreset').value;
+
+        let filtered = [...appState.bills];
+
+        // Keyword filter
+        if (keyword) {
+          filtered = filtered.filter(b => 
+            b.shopName.toLowerCase().includes(keyword) || 
+            (b.description && b.description.toLowerCase().includes(keyword)) ||
+            (b.note && b.note.toLowerCase().includes(keyword))
+          );
+        }
+
+        // Category filter
+        if (category) {
+          filtered = filtered.filter(b => b.category === category);
+        }
+
+        // Date Preset filter
+        if (datePreset !== 'all') {
+          const now = new Date();
+          if (datePreset === 'today') {
+            const todayStr = now.toISOString().split('T')[0];
+            filtered = filtered.filter(b => b.date === todayStr);
+          } else if (datePreset === 'month') {
+            const curYear = now.getFullYear();
+            const curMonth = now.getMonth();
+            filtered = filtered.filter(b => {
+              const d = new Date(b.date);
+              return d.getFullYear() === curYear && d.getMonth() === curMonth;
+            });
+          } else if (datePreset === 'custom') {
+            const start = document.getElementById('searchStartDate').value;
+            const end = document.getElementById('searchEndDate').value;
+            if (start) filtered = filtered.filter(b => b.date >= start);
+            if (end) filtered = filtered.filter(b => b.date <= end);
+          }
+        }
+
+        const grid = document.getElementById('searchResultsGrid');
+        grid.innerHTML = '';
+
+        const sum = filtered.reduce((s, b) => s + b.amount, 0);
+        document.getElementById('searchResultSum').textContent = `รวม ${UIService.formatMoney(sum)}`;
+        document.getElementById('searchResultsHeader').textContent = `ผลการค้นหา (${filtered.length} รายการ)`;
+
+        if (filtered.length === 0) {
+          grid.innerHTML = `<div class="col-span-full py-8 text-center text-slate-400 text-sm">ไม่พบรายการบิลที่ตรงตามเงื่อนไข</div>`;
+          return;
+        }
+
+        filtered.forEach(bill => {
+          const cat = appState.categories.find(c => c.id === bill.category) || { name: 'อื่นๆ', color: '#64748b', icon: 'fa-solid fa-tag' };
+          const card = document.createElement('div');
+          card.className = 'bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-sm hover:shadow transition flex items-center justify-between cursor-pointer';
+          card.onclick = () => UIService.openDetailModal(bill.id);
+
+          card.innerHTML = `
+            <div class="flex items-center space-x-3">
+              <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm" style="background-color: ${cat.color}">
+                <i class="${cat.icon}"></i>
+              </div>
+              <div>
+                <h4 class="font-bold text-sm text-slate-900 dark:text-white">${bill.shopName}</h4>
+                <p class="text-xs text-slate-400">${bill.date} • ${cat.name}</p>
+              </div>
+            </div>
+            <span class="font-bold text-sm text-slate-900 dark:text-white">${UIService.formatMoney(bill.amount)}</span>
+          `;
+          grid.appendChild(card);
+        });
+      },
+
+      renderCategories() {
+        const grid = document.getElementById('categoriesListGrid');
+        grid.innerHTML = '';
+
+        // Select options dropdown in forms
+        const formCatSelect = document.getElementById('billCategory');
+        const searchCatSelect = document.getElementById('searchCategory');
+
+        formCatSelect.innerHTML = '';
+        searchCatSelect.innerHTML = '<option value="">ทั้งหมด</option>';
+
+        appState.categories.forEach(cat => {
+          // Add to select options
+          const opt1 = document.createElement('option');
+          opt1.value = cat.id;
+          opt1.textContent = cat.name;
+          formCatSelect.appendChild(opt1);
+
+          const opt2 = document.createElement('option');
+          opt2.value = cat.id;
+          opt2.textContent = cat.name;
+          searchCatSelect.appendChild(opt2);
+
+          // Card UI
+          const count = appState.bills.filter(b => b.category === cat.id).length;
+          const card = document.createElement('div');
+          card.className = 'bg-white dark:bg-slate-800 rounded-2xl p-4 border border-slate-200/80 dark:border-slate-700/80 shadow-sm flex items-center justify-between space-x-3';
+          card.innerHTML = `
+            <div class="flex items-center space-x-3">
+              <div class="w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm" style="background-color: ${cat.color}">
+                <i class="${cat.icon}"></i>
+              </div>
+              <div>
+                <h4 class="font-bold text-sm text-slate-900 dark:text-white">${cat.name}</h4>
+                <p class="text-xs text-slate-400">${count} บิล</p>
+              </div>
+            </div>
+            <div class="flex items-center space-x-1">
+              <button onclick="UIService.openEditCategory('${cat.id}')" class="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"><i class="fa-solid fa-pen"></i></button>
+              <button onclick="UIService.deleteCategory('${cat.id}')" class="p-2 text-slate-400 hover:text-red-500"><i class="fa-solid fa-trash"></i></button>
+            </div>
+          `;
+          grid.appendChild(card);
+        });
+      },
+
+      openEditCategory(catId) {
+        const cat = appState.categories.find(c => c.id === catId);
+        if (!cat) return;
+        document.getElementById('catId').value = cat.id;
+        document.getElementById('catName').value = cat.name;
+        document.getElementById('catColor').value = cat.color;
+        document.getElementById('catIcon').value = cat.icon;
+        document.getElementById('catModalTitle').textContent = 'แก้ไขหมวดหมู่';
+        document.getElementById('categoryModal').classList.remove('hidden');
+      },
+
+      async handleCategoryFormSubmit(e) {
+        e.preventDefault();
+        const id = document.getElementById('catId').value || ('cat_' + Date.now());
+        const name = document.getElementById('catName').value.trim();
+        const color = document.getElementById('catColor').value;
+        const icon = document.getElementById('catIcon').value.trim() || 'fa-solid fa-tag';
+
+        if (!name) return;
+
+        const category = { id, name, color, icon };
+        await DBService.saveItem('categories', category);
+
+        const idx = appState.categories.findIndex(c => c.id === id);
+        if (idx !== -1) appState.categories[idx] = category;
+        else appState.categories.push(category);
+
+        document.getElementById('categoryModal').classList.add('hidden');
+        UIService.refreshAllViews();
+        NotificationService.showToast('บันทึกหมวดหมู่สำเร็จ', 'success');
+      },
+
+      deleteCategory(catId) {
+        ConfirmModal.show('ยืนยันลบหมวดหมู่', 'คุณแน่ใจหรือไม่ที่จะลบหมวดหมู่นี้? บิลในหมวดหมู่นี้จะถูกย้ายไป "อื่นๆ"', async () => {
+          await DBService.deleteItem('categories', catId);
+          appState.categories = appState.categories.filter(c => c.id !== catId);
+
+          // Reassign bills
+          appState.bills.forEach(async b => {
+            if (b.category === catId) {
+              b.category = 'cat_other';
+              await DBService.saveItem('bills', b);
+            }
+          });
+
+          UIService.refreshAllViews();
+          NotificationService.showToast('ลบหมวดหมู่เรียบร้อยแล้ว', 'info');
+        });
+      },
+
+      renderAnalysisCharts() {
+        // Pie Chart: Category Distribution
+        const catMap = {};
+        appState.bills.forEach(b => {
+          const cat = appState.categories.find(c => c.id === b.category) || { name: 'อื่นๆ' };
+          catMap[cat.name] = (catMap[cat.name] || 0) + b.amount;
+        });
+
+        const pieLabels = Object.keys(catMap);
+        const pieData = Object.values(catMap);
+
+        if (UIService.chartCategoryPie) UIService.chartCategoryPie.destroy();
+        const pieCtx = document.getElementById('chartCategoryPie').getContext('2d');
+        UIService.chartCategoryPie = new Chart(pieCtx, {
+          type: 'doughnut',
+          data: {
+            labels: pieLabels.length ? pieLabels : ['ไม่มีข้อมูล'],
+            datasets: [{
+              data: pieData.length ? pieData : [1],
+              backgroundColor: ['#3b82f6', '#eab308', '#a855f7', '#ec4899', '#ef4444', '#f97316', '#10b981', '#64748b']
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { position: 'bottom' } }
+          }
+        });
+
+        // Bar Chart: Monthly Expense Trend
+        const monthMap = {};
+        appState.bills.forEach(b => {
+          const date = new Date(b.date);
+          const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+          monthMap[monthKey] = (monthMap[monthKey] || 0) + b.amount;
+        });
+
+        const barLabels = Object.keys(monthMap).sort();
+        const barData = barLabels.map(k => monthMap[k]);
+
+        if (UIService.chartMonthlyBar) UIService.chartMonthlyBar.destroy();
+        const barCtx = document.getElementById('chartMonthlyBar').getContext('2d');
+        UIService.chartMonthlyBar = new Chart(barCtx, {
+          type: 'bar',
+          data: {
+            labels: barLabels.length ? barLabels : ['ไม่มีข้อมูล'],
+            datasets: [{
+              label: 'ยอดรวม (บาท)',
+              data: barData.length ? barData : [0],
+              backgroundColor: '#10b981',
+              borderRadius: 8
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } }
+          }
+        });
+      },
+
+      renderNotifications() {
+        const list = document.getElementById('notificationsLogList');
+        const badge = document.getElementById('navNotifBadge');
+        list.innerHTML = '';
+
+        if (appState.notifications.length > 0) {
+          badge.textContent = appState.notifications.length;
+          badge.classList.remove('hidden');
+        } else {
+          badge.classList.add('hidden');
+        }
+
+        if (appState.notifications.length === 0) {
+          list.innerHTML = `<p class="text-xs text-slate-400 text-center py-6">ไม่มีประวัติการแจ้งเตือน</p>`;
+          return;
+        }
+
+        appState.notifications.forEach(n => {
+          const item = document.createElement('div');
+          item.className = 'py-2.5 flex items-center justify-between text-xs';
+          item.innerHTML = `
+            <div class="flex items-center space-x-2">
+              <span class="w-2 h-2 rounded-full bg-brand-500"></span>
+              <span class="text-slate-800 dark:text-slate-200 font-medium">${n.message}</span>
+            </div>
+            <span class="text-slate-400 text-[10px]">${new Date(n.timestamp).toLocaleTimeString('th-TH')}</span>
+          `;
+          list.appendChild(item);
+        });
+      },
+
+      openDetailModal(billId) {
+        const bill = appState.bills.find(b => b.id === billId);
+        if (!bill) return;
+
+        appState.activeBillDetailId = billId;
+        const cat = appState.categories.find(c => c.id === bill.category) || { name: 'อื่นๆ', color: '#64748b' };
+
+        document.getElementById('detailShopTitle').textContent = bill.shopName;
+        document.getElementById('detailDate').textContent = bill.date;
+        document.getElementById('detailAmount').textContent = UIService.formatMoney(bill.amount);
+        document.getElementById('detailDescription').textContent = bill.description || '-';
+        document.getElementById('detailNote').textContent = bill.note || '-';
+        document.getElementById('detailCreatedAt').textContent = new Date(bill.createdAt).toLocaleString('th-TH');
+
+        document.getElementById('detailCategoryBadge').innerHTML = `
+          <span class="px-2.5 py-1 rounded-full text-xs font-semibold text-white inline-block" style="background-color: ${cat.color}">${cat.name}</span>
+        `;
+
+        // Handle Image Blob render
+        const imgWrapper = document.getElementById('detailImageWrapper');
+        const imgEl = document.getElementById('detailImage');
+
+        if (bill.imageBlob) {
+          const reader = new FileReader();
+          reader.onload = (e) => {
+            imgEl.src = e.target.result;
+            imgWrapper.classList.remove('hidden');
+          };
+          reader.readAsDataURL(bill.imageBlob);
+        } else {
+          imgWrapper.classList.add('hidden');
+        }
+
+        document.getElementById('detailModal').classList.remove('hidden');
+
+        // Edit Button Handler inside Detail Modal
+        document.getElementById('editDetailBtn').onclick = () => {
+          document.getElementById('detailModal').classList.add('hidden');
+          UIService.populateFormForEdit(bill);
+        };
+
+        // Delete Button Handler
+        document.getElementById('deleteDetailBtn').onclick = () => {
+          document.getElementById('detailModal').classList.add('hidden');
+          ConfirmModal.show('ยืนยันลบบิลนี้', 'คุณแน่ใจหรือไม่ว่าต้องการลบบิลนี้? ข้อมูลจะถูกลบอย่างถาวร', async () => {
+            await DBService.deleteItem('bills', bill.id);
+            appState.bills = appState.bills.filter(b => b.id !== bill.id);
+            UIService.refreshAllViews();
+            NotificationService.showToast('ลบบิลเรียบร้อยแล้ว', 'info');
+          });
+        };
+      },
+
+      populateFormForEdit(bill) {
+        document.getElementById('billId').value = bill.id;
+        document.getElementById('billShop').value = bill.shopName;
+        document.getElementById('billDate').value = bill.date;
+        document.getElementById('billAmount').value = bill.amount;
+        document.getElementById('billCategory').value = bill.category;
+        document.getElementById('billDescription').value = bill.description || '';
+        document.getElementById('billNote').value = bill.note || '';
+
+        document.getElementById('recordFormTitle').innerHTML = `
+          <span class="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center text-sm">
+            <i class="fa-solid fa-pen"></i>
+          </span>
+          <span>แก้ไขข้อมูลบิล</span>
+        `;
+
+        if (bill.imageBlob) {
+          appState.capturedBlob = bill.imageBlob;
+          UIService.setPreviewImageFromBlob(bill.imageBlob);
+        } else {
+          document.getElementById('imagePreviewContainer').classList.add('hidden');
+        }
+
+        UIService.switchPage('record');
+      },
+
+      refreshAllViews() {
+        UIService.renderDashboard();
+        UIService.renderBillsList();
+        UIService.renderSearchResults();
+        UIService.renderCategories();
+        UIService.renderNotifications();
+      },
+
+      exportDataJSON() {
+        const exportObj = {
+          version: '2.0.0',
+          exportedAt: new Date().toISOString(),
+          bills: appState.bills.map(b => ({
+            ...b,
+            imageBlob: null // Exclude heavy blobs in pure JSON
+          })),
+          categories: appState.categories
+        };
+
+        const blob = new Blob([JSON.stringify(exportObj, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `BillTracker_Backup_${new Date().toISOString().split('T')[0]}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+        NotificationService.showToast('ส่งออกไฟล์สำรองข้อมูล JSON เรียบร้อยแล้ว', 'success');
+      },
+
+      async importDataJSON(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = async (evt) => {
+          try {
+            const data = JSON.parse(evt.target.result);
+            if (data.bills && Array.isArray(data.bills)) {
+              for (const bill of data.bills) {
+                await DBService.saveItem('bills', bill);
+              }
+            }
+            if (data.categories && Array.isArray(data.categories)) {
+              for (const cat of data.categories) {
+                await DBService.saveItem('categories', cat);
+              }
+            }
+            appState.bills = await DBService.getAll('bills');
+            appState.categories = await DBService.getAll('categories');
+            UIService.refreshAllViews();
+            NotificationService.showToast('นำเข้าข้อมูลสำรองสำเร็จแล้ว', 'success');
+          } catch (err) {
+            NotificationService.showToast('รูปแบบไฟล์ JSON ไม่ถูกต้อง', 'error');
+          }
+        };
+        reader.readAsText(file);
+      }
+    };
+
+
+    /* APPLICATION INITIALIZATION */
+    window.addEventListener('load', async () => {
+      try {
+        await DBService.init();
+
+        // Load Initial DB State
+        appState.bills = await DBService.getAll('bills');
+        appState.categories = await DBService.getAll('categories');
+        appState.notifications = await DBService.getAll('notifications');
+
+        // Load Theme Preferences
+        const savedTheme = localStorage.getItem('billtracker_theme') || 'auto';
+        UIService.applyTheme(savedTheme);
+
+        // Load Currency
+        const savedCurrency = localStorage.getItem('billtracker_currency') || 'THB';
+        appState.settings.currency = savedCurrency;
+        document.getElementById('settingCurrency').value = savedCurrency;
+
+        UIService.init();
+        UIService.updateCurrencyUI();
+        UIService.refreshAllViews();
+
+        console.log('BillTracker Pro V.2.0.0 Standalone Engine Ready');
+      } catch (err) {
+        console.error('Initialization Failed:', err);
+      }
+    });
+  </script>
+</body>
+</html>
